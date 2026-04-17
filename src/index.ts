@@ -1,31 +1,61 @@
 import express from 'express';
 import {createServer} from "http";
-import {Server} from 'socket.io'
+import {Server} from 'socket.io';
+import cors from 'cors';
+import notificationRoutes from './routes/notification.routes';
 import {initSocket} from "./sockets/socket.service";
 import {connectRedis} from "./config/redis.config";
 import {startNotificationConsumer} from "./services/kafka.consumer";
+import 'dotenv/config'
+import mongoose from "mongoose";
 
 const app = express()
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/notifications', notificationRoutes);
+
 const httpServer = createServer(app);
 
-const io = new Server({
+const io = new Server(httpServer,{
     cors: {
-        origin: '*'
+        origin: '*',
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     }
 })
 
 initSocket(io);
 
 const startServer = async () => {
-    await connectRedis();
+    try {
+        await connectRedis();
 
-    await startNotificationConsumer(io);
+        await startNotificationConsumer(io);
 
-    const PORT = process.env.PORT || 5000;
-    httpServer.listen(PORT, () => {
-        console.log(`🚀 Notification Service running on port ${PORT}`);
-    });
+        const PORT = process.env.PORT || 5000;
+        httpServer.listen(PORT, () => {
+            console.log(`🚀 Notification Service running on port ${PORT}`);
+        });
+
+    }catch (err) {
+        // @ts-ignore
+        console.error("Critical Server Error:", err.message);
+        process.exit(1);
+    }
 }
+
+const connectDB = async () => {
+    try {
+        const conn = await mongoose.connect(process.env.MONGO_URI!);
+        console.log(`🍃 MongoDB Connected: ${conn.connection.host}`);
+    } catch (error: any) {
+        console.error(`❌ Error: ${error.message}`);
+        process.exit(1);
+    }
+};
+
+connectDB();
+
 startServer().catch((err) => {
     console.error(err.message)
 })
