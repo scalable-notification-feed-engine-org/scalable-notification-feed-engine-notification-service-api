@@ -1,38 +1,52 @@
-import * as jwt from "jsonwebtoken";
-import webclient from 'jwks-rsa'
-import {Socket} from "socket.io";
+import {Response, Request, NextFunction} from "express";
+import jwt from "jsonwebtoken";
 
+export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+    console.log("🚀 Auth Middleware Started...");
 
-export interface AuthenticatedSocket extends Socket {
-    userId?: string;
-    tenantId?: string;
-}
+    try {
+        const authHeader = req.headers.authorization;
+        console.log("📡 Header Received:", authHeader ? "YES" : "NO");
 
-const client = webclient({
-    jwksUri: process.env.JWKS_URI!,
-});
+        const token = authHeader?.split(' ')[1];
+        if (!token) {
+            console.log("❌ No Token Found");
+            return res.status(401).json({ message: "Unauthorized" });
+        }
 
+        const rawKey = process.env.JWT_PUBLIC_KEY;
+        console.log("🔑 Raw Key from ENV:", rawKey ? "LOADED" : "MISSING");
 
-function getKey(header: any, callback: any) {
-    client.getSigningKey(header.key, (err, key: any) =>{
-        const signingKey = key.publicKey || key.rsaPublicKey;
-        callback(null, signingKey);
-    })
-}
+        if (!rawKey) {
+            throw new Error("JWT_PUBLIC_KEY is not defined in .env");
+        }
 
-export const socketKeycloakMiddleware = (socket: AuthenticatedSocket, next: any) =>{
+        // PEM formatting
+        const cleanKey = rawKey.replace(/\s/g, '');
+        const keyLines = cleanKey.match(/.{1,64}/g);
 
-    const token = socket.handshake.auth?.token;
+        if (!keyLines) {
+            throw new Error("Key Formatting failed - Regex match returned null");
+        }
 
-    if (!token) return next(new Error('Authentication error: Token missing'));
+        const formattedKey = `-----BEGIN CERTIFICATE-----\n${keyLines.join('\n')}\n-----END CERTIFICATE-----`;
 
-    jwt.verify(token, getKey, { algorithms: ['RS256'] }, (err, decoded: any) => {
-        if (err) return next(new Error('Authentication failed'));
+        console.log("⚖️ Attempting JWT Verification...");
+        const decoded = jwt.verify(token, formattedKey, { algorithms: ['RS256'] });
 
-        socket.userId = decoded.sub;
-        socket.tenantId = decoded.tenantId;
-
+        console.log("✅ Verification Success! User ID:", (decoded as any).sub);
+        (req as any).user = decoded;
         next();
-    })
 
-}
+    } catch (err: any) {
+
+        console.error("🔥 CRITICAL MIDDLEWARE ERROR:", err.message);
+        console.error("🔥 FULL ERROR STACK:", err.stack);
+
+        // @ts-ignore
+        return res.status(500).json({
+            message: "Internal Server Error",
+            dev_error: err.message
+        });
+    }
+};
