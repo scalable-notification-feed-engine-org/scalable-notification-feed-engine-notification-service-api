@@ -26,7 +26,7 @@ export const startNotificationConsumer = async (io:Server) => {
 
                 const displayMessage = `${activity.actorId} ${activity.verb.toLowerCase()}ed your ${activity.objectType}`;
 
-                const isDelivered = sendNotificationViaSocket(io, activity.recipientId, {
+                const isDelivered = await sendNotificationViaSocket(io, activity.recipientId, {
                     message: displayMessage,
                     type: activity.verb,
                     objectId: activity.objectId,
@@ -39,12 +39,12 @@ export const startNotificationConsumer = async (io:Server) => {
                     type: activity.verb,
                     message: displayMessage,
                     targetId: activity.targetId,
-                    isRead: isDelivered,
+                    isRead: false,
                     createAt: new Date(),
                 })
 
                 await newNotification.save();
-                console.log(`✅ Notification stored for user: ${activity.recipientId}`);
+                console.log(`✅ Notification stored for user: ${isDelivered}`);
             } catch (e) {
                 console.error('❌ Error processing Kafka message:', e);
             }
