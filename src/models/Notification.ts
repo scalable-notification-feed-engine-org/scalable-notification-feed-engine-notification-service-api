@@ -18,6 +18,8 @@ const NotificationSchema: Schema = new Schema({
    targetId: {type: String},
    isRead: {type: Boolean, default: false},
    createdAt: {type: Date, default: Date.now},
+},{
+    collection: 'notifications'
 })
 
 export default mongoose.model<INotification>('Notification',NotificationSchema);
