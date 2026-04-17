@@ -1,7 +1,7 @@
 import {Server} from "socket.io";
 import {SocketEvents} from "../enums/socket.events";
 import redisClient from '../config/redis.config'
-import {AuthenticatedSocket, socketKeycloakMiddleware} from "../middlewares/auth.middleware";
+import {AuthenticatedSocket, socketKeycloakMiddleware} from "../middlewares/auth.socket.middleware";
 
 
 export const initSocket = (io: Server) =>{
