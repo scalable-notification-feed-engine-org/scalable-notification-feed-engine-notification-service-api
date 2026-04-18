@@ -1,53 +1,59 @@
-import {Server} from "socket.io";
-import {SocketEvents} from "../enums/socket.events";
-import redisClient from '../config/redis.config'
-import {AuthenticatedSocket, socketKeycloakMiddleware} from "../middlewares/auth.socket.middleware";
+import { Server, Socket } from "socket.io";
+import redisClient from '../config/redis.config';
 
+let globalIo: Server;
 
-export const initSocket = (io: Server) =>{
+export const initSocket = (io: Server) => {
+    globalIo = io;
 
-    io.use(socketKeycloakMiddleware);
+    //  io.use(socketKeycloakMiddleware);
 
-    io.on('connection', async (socket: AuthenticatedSocket) => {
-        console.log("New client connected to: " + socket.userId);
-        const userId = socket.userId;
+    console.log("📡 Socket Server Initialized and Waiting...");
 
-        if(userId){
-            await redisClient.set(`online_user:${userId}`, socket.id);
+    io.on('connection', (socket: Socket) => {
+        console.log(`⚡ New Connection: ${socket.id}`);
 
-            socket.on('disconnect', async () => {
-                await redisClient.del(`online_user:${userId}`);
-                console.log(`👋 User ${userId} went Offline`);
-            })
-        }
+        socket.on("join", async (userId: string) => {
+            if (!userId) {
+                console.error(" Join failed: No userId provided");
+                return;
+            }
 
-    })
-}
+            const cleanUserId = userId.trim();
 
-export const sendNotificationViaSocket = async (io: Server,userId:string,data:any):Promise<boolean> =>{
-    const socketId = await redisClient.get(`online_user:${userId}`);
-    if(socketId){
-        io.to(socketId).emit(SocketEvents.SEND_NOTIFICATION, data);
-        console.log(`⚡ Real-time notification sent to user ${userId}`);
+            await socket.join(cleanUserId);
+            console.log(`🏠 User [${cleanUserId}] successfully joined their private room.`);
+
+            try {
+                await redisClient.set(`online_user:${cleanUserId}`, "true");
+                const verify = await redisClient.get(`online_user:${cleanUserId}`);
+                console.log(` Redis Status for ${cleanUserId}: ${verify ? 'ONLINE' : 'FAILED'}`);
+            } catch (err) {
+                console.error(" Redis Set Error:", err);
+            }
+
+            const isActive = io.sockets.adapter.rooms.has(cleanUserId);
+            console.log(` Room [${cleanUserId}] Active Status: ${isActive}`);
+        });
+
+        socket.on('disconnect', async () => {
+            console.log(` Socket Disconnected: ${socket.id}`);
+        });
+    });
+};
+
+export const sendNotificationViaSocket = async (userId: string, data: any): Promise<boolean> => {
+    if (!globalIo) return false;
+
+    const cleanId = userId.trim();
+    const sockets = await globalIo.in(cleanId).fetchSockets();
+
+    if (sockets.length > 0) {
+        globalIo.to(cleanId).emit("notification", data); // Frontend එකේ "notification" ලෙස සවන් දෙන්න
+        console.log(` Delivered to ${cleanId}`);
         return true;
-    }else {
-        console.log(`💤 User ${userId} is offline. Saving only to DB.`);
-        return false;
     }
-}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    console.log(` User ${cleanId} is offline (No sockets in room)`);
+    return false;
+};
