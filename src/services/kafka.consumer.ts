@@ -25,28 +25,35 @@ export const startNotificationConsumer = async (io:Server) => {
                 console.log(`📩 New Activity Received: ${activity.verb} by User ${activity.actorId}`);
 
                 const displayMessage = `${activity.actorId} ${activity.verb.toLowerCase()}ed your ${activity.objectType}`;
-
-                const isDelivered = await sendNotificationViaSocket(io, activity.recipientId, {
-                    message: displayMessage,
-                    type: activity.verb,
-                    objectId: activity.objectId,
-                    createAt: new Date(),
-                });
+                const  rawId = activity.recipientId;
+                const recipientId = String(rawId).trim();
 
                 const newNotification = new Notification({
-                    recipientId: activity.recipientId,
+                    recipientId: recipientId,
                     actorId: activity.actorId,
                     type: activity.verb,
                     message: displayMessage,
                     targetId: activity.targetId,
                     isRead: false,
-                    createAt: new Date(),
+                    createdAt: new Date(),
                 })
 
-                await newNotification.save();
-                console.log(`✅ Notification stored for user: ${isDelivered}`);
+                const saveNotification = await newNotification.save();
+
+
+             if (saveNotification) {
+                 const isDelivered = await sendNotificationViaSocket(activity.recipientId, {
+                     id: saveNotification._id,
+                     message: displayMessage,
+                     type: activity.verb,
+                     objectId: activity.objectId,
+                     createdAt: new Date(),
+                 });
+                 console.log(` Notification stored for user: ${isDelivered}`);
+             }
+
             } catch (e) {
-                console.error('❌ Error processing Kafka message:', e);
+                console.error(' Error processing Kafka message:', e);
             }
 
         }
