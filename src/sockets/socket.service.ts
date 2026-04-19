@@ -11,7 +11,7 @@ export const initSocket = (io: Server) => {
     console.log("📡 Socket Server Initialized and Waiting...");
 
     io.on('connection', (socket: Socket) => {
-        console.log(`⚡ New Connection: ${socket.id}`);
+        console.log(`New Connection: ${socket.id}`);
 
         socket.on("join", async (userId: string) => {
             if (!userId) {
@@ -21,8 +21,15 @@ export const initSocket = (io: Server) => {
 
             const cleanUserId = userId.trim();
 
+            (socket as any).userId = cleanUserId;
+
             await socket.join(cleanUserId);
             console.log(`🏠 User [${cleanUserId}] successfully joined their private room.`);
+
+            globalIo.emit("user_status_changed" , {
+                userId: cleanUserId,
+                status: "online"
+            })
 
             try {
                 await redisClient.set(`online_user:${cleanUserId}`, "true");
@@ -37,7 +44,19 @@ export const initSocket = (io: Server) => {
         });
 
         socket.on('disconnect', async () => {
-            console.log(` Socket Disconnected: ${socket.id}`);
+            const userId = (socket as any).userId;
+            const sockets = await globalIo.in(userId).fetchSockets();
+
+           if(sockets.length === 0 ) {
+               globalIo.emit("user_status_changed" , {
+                   userId: userId,
+                   status: "offline"
+               })
+               await redisClient.del(`online_user:${userId}`);
+           }else {
+               console.log(` User ${userId} still has ${sockets.length} device(s) online`);
+           }
+
         });
     });
 };
@@ -49,7 +68,7 @@ export const sendNotificationViaSocket = async (userId: string, data: any): Prom
     const sockets = await globalIo.in(cleanId).fetchSockets();
 
     if (sockets.length > 0) {
-        globalIo.to(cleanId).emit("notification", data); // Frontend එකේ "notification" ලෙස සවන් දෙන්න
+        globalIo.to(cleanId).emit("notification", data);
         console.log(` Delivered to ${cleanId}`);
         return true;
     }
