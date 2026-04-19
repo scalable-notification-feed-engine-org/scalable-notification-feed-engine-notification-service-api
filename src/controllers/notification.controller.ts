@@ -9,10 +9,11 @@ export const getNotifications = async (request:Request, response:Response) => {
            .sort({ createdAt : -1 })
            .limit(50);
        response.status(200).json(notifications || []);
+       console.log(notifications);
 
     }catch(err){
         // @ts-ignore
-        console.error("🔥 Controller Error:", err.message);
+        console.error(" Controller Error:", err.message);
         response.status(500).json({message: "Error while getting notification" , err});
     }
 }
