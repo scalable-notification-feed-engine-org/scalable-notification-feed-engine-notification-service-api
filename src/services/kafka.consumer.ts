@@ -12,7 +12,7 @@ export const startNotificationConsumer = async (io:Server) => {
     });
 
     await consumer.run({
-        eachMesusage: async ({topic, partition, message}) => {
+        eachMessage: async ({topic, partition, message}) => {
             if (!message) return;
             console.log(`Topic: ${topic} | Partition: ${partition} | Key: ${message.key?.toString()}`);
 
